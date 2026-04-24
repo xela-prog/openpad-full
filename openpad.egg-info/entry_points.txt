@@ -1,2 +1,0 @@
-[console_scripts]
-openpad = openpad.main:main
