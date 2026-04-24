@@ -1,0 +1,16 @@
+# Ignore API keys and secrets
+credentials.json
+
+# Ignore Python cache
+__pycache__/
+*.py[cod]
+
+# Ignore VS Code settings
+.vscode/
+
+# Ignore OS files
+.DS_Store
+Thumbs.db
+
+# Ignore environment files
+.env

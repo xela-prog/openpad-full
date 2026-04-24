@@ -1,0 +1,21 @@
+[project]
+name = "openpad"
+version = "1.0.0"
+description = "Terminal-based note-taking app for computer science students"
+readme = "README.md"
+authors = [
+    { name = "Pierre-alexandre Merge Fignole" }
+]
+requires-python = ">=3.10"
+
+dependencies = [
+    "textual>=0.80.0",
+    "rich>=13.0.0"
+]
+
+[project.scripts]
+openpad = "openpad.main:main"
+
+[build-system]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
