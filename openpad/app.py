@@ -13,7 +13,7 @@ import re
 import calendar
 from datetime import datetime
 
-def _truncate(text, max_len=14):
+def _truncate(text, max_len=13):
     return text if len(text) <= max_len else text[:max_len - 3] + "…"
 
 session_log = []
@@ -97,19 +97,17 @@ class CalendarModal(ModalScreen):
         self._render_events()
 
     def _fetch_events(self):
-    try:
-        from openpad.calendar_api import get_events_for_month
-        result = get_events_for_month(self.current_year, self.current_month)
+        try:
+            from openpad.calendar_api import get_events_for_month
+            result = get_events_for_month(self.current_year, self.current_month)
 
-        if "error" in result:
-            print("Google Calendar not configured. Add credentials.json to ~/.openpad/")
+            if "error" in result:
+                self.events_by_day = {}
+            else:
+                self.events_by_day = result
+
+        except Exception:
             self.events_by_day = {}
-        else:
-            self.events_by_day = result
-
-    except Exception:
-        print("Google Calendar not configured. Add credentials.json to ~/.openpad/")
-        self.events_by_day = {}
 
     def _render_calendar(self):
         t = THEMES.get(self.theme_name, THEMES["opencode"])
@@ -183,7 +181,7 @@ class CalendarModal(ModalScreen):
         body = self.query_one("#cal-events-body")
 
         if not events:
-            body.update("[dim]No events\n\nCalendar not configured.\nAdd credentials.json to ~/.openpad/[/dim]")
+            body.update("[dim]No events for this day.\n\nIf calendar is not configured, add credentials.json to ~/.openpad/[/dim]")
             return
 
         lines = []
@@ -327,44 +325,62 @@ class NoteViewer(ScrollableContainer):
     def _style_line(self, line: str, t: dict, line_num: int) -> Text:
         prefix = Text(f"{line_num:>4}  ", style=f"dim {t['text']}")
 
-        if line.startswith("# "):
-            content = Text(line[2:], style=f"bold {t['primary']}")
-        elif line.startswith("## "):
-            content = Text(line[3:], style=f"bold {t['secondary']}")
-        elif line.startswith("### "):
-            content = Text(line[4:], style=f"bold {t['accent']}")
-        elif line.startswith("#### "):
-            content = Text(line[5:], style=t["accent"])
-        elif line.startswith("> "):
-            content = Text(f"│ {line[2:]}", style=f"italic {t['text_muted']}")
-        elif line.startswith("- ") or line.startswith("* "):
-            content = Text(f"• {line[2:]}", style=t["text"])
-        elif re.match(r"^\d+\. ", line):
-            content = Text(line, style=t["text"])
-        elif line.startswith("---"):
-            content = Text("─" * 50, style=t["text_muted"])
-        else:
-            content = Text()
-            remaining = line
-            if "|" in line:
-                content = Text(line, style=t["text"])
+        indent_len = len(line) - len(line.lstrip())
+        indent = line[:indent_len]
+        stripped = line.lstrip()
+
+        content = Text(indent, style=t["text"])
+
+        def inline(text: str) -> Text:
+            result = Text()
+            pattern = re.compile(r"(\*\*(.+?)\*\*|__(.+?)__|`([^`]+)`|\*(.+?)\*|_(.+?)_)")
+            last = 0
+
+            for m in pattern.finditer(text):
+                result.append(text[last:m.start()], style=t["text"])
+                full = m.group(0)
+
+                if full.startswith("**") or full.startswith("__"):
+                    inner = m.group(2) or m.group(3)
+                    result.append(inner, style=f"bold {t['text']}")
+                elif full.startswith("`"):
+                    inner = m.group(4)
+                    result.append(f"`{inner}`", style=t["syntax_str"])
+                elif full.startswith("*") or full.startswith("_"):
+                    inner = m.group(5) or m.group(6)
+                    result.append(inner, style=f"italic {t['text']}")
+
+                last = m.end()
+
+            result.append(text[last:], style=t["text"])
+            return result
+
+        if stripped.startswith("# "):
+            content.append(stripped[2:], style=f"bold {t['primary']}")
+        elif stripped.startswith("## "):
+            content.append(stripped[3:], style=f"bold {t['secondary']}")
+        elif stripped.startswith("### "):
+            content.append(stripped[4:], style=f"bold {t['accent']}")
+        elif stripped.startswith("#### "):
+            content.append(stripped[5:], style=t["accent"])
+        elif stripped.startswith("> "):
+            content.append(f"│ {stripped[2:]}", style=f"italic {t['text_muted']}")
+        elif stripped.startswith("- ") or stripped.startswith("* "):
+            item = stripped[2:]
+
+            if item.startswith("> "):
+                content.append("• ", style=t["text"])
+                content.append(f"│ {item[2:]}", style=f"italic {t['text_muted']}")
             else:
-                pattern = re.compile(r"(\*\*(.+?)\*\*|__(.+?)__|`([^`]+)`|\*(.+?)\*|_(.+?)_)")
-                last = 0
-                for m in pattern.finditer(remaining):
-                    content.append(remaining[last:m.start()], style=t["text"])
-                    full = m.group(0)
-                    if full.startswith("**") or full.startswith("__"):
-                        inner = m.group(2) or m.group(3)
-                        content.append(inner, style=f"bold {t['text']}")
-                    elif full.startswith("`"):
-                        inner = m.group(4)
-                        content.append(f"`{inner}`", style=t["syntax_str"])
-                    elif full.startswith("*") or full.startswith("_"):
-                        inner = m.group(5) or m.group(6)
-                        content.append(inner, style=f"italic {t['text']}")
-                    last = m.end()
-                content.append(remaining[last:], style=t["text"])
+                content.append("• ", style=t["text"])
+                content.append_text(inline(item))
+
+        elif re.match(r"^\d+\. ", stripped):
+            content.append_text(inline(stripped))
+        elif stripped.startswith("---"):
+            content.append("─" * 50, style=t["text_muted"])
+        else:
+            content.append_text(inline(stripped))
 
         result = Text()
         result.append_text(prefix)
@@ -397,7 +413,7 @@ class ThemePicker(ModalScreen):
             yield Static("", id="theme-footer")
 
     def on_mount(self):
-        t = THEMES[self.theme_names[0]]
+        t = THEMES.get(self.active_pad_theme, THEMES["opencode"])
         self.query_one("#theme-modal").styles.background = t["bg_panel"]
         self.query_one("#theme-modal").styles.border = ("solid", t["border_active"])
         self.query_one("#theme-title").styles.color = t["primary"]
@@ -435,10 +451,11 @@ class InputModal(ModalScreen):
         Binding("escape", "cancel", "Cancel"),
     ]
 
-    def __init__(self, prompt: str, placeholder: str = ""):
+    def __init__(self, prompt: str, placeholder: str = "", theme_name: str = "opencode"):
         super().__init__()
         self._prompt = prompt
         self._placeholder = placeholder
+        self.theme_name = theme_name
 
     def compose(self) -> ComposeResult:
         with Vertical(id="input-modal"):
@@ -447,7 +464,21 @@ class InputModal(ModalScreen):
             yield Label("[dim]enter confirm  esc cancel[/dim]", id="input-hint")
 
     def on_mount(self):
-        self.query_one("#modal-input").focus()
+        t = THEMES.get(self.theme_name, THEMES["opencode"])
+
+        modal = self.query_one("#input-modal")
+        modal.styles.background = t["bg_panel"]
+        modal.styles.border = ("solid", t["border_active"])
+
+        self.query_one("#input-label").styles.color = t["primary"]
+        self.query_one("#input-hint").styles.color = t["text_muted"]
+
+        inp = self.query_one("#modal-input")
+        inp.styles.background = t["bg"]
+        inp.styles.color = t["text"]
+        inp.styles.border = ("solid", t["border_active"])
+
+        inp.focus()
 
     def on_input_submitted(self, event: Input.Submitted):
         self.dismiss(event.value.strip())
@@ -467,14 +498,25 @@ class ConfirmModal(ModalScreen):
         Binding("escape", "cancel", "Cancel"),
     ]
 
-    def __init__(self, message: str):
+    def __init__(self, message: str, theme_name: str = "opencode"):
         super().__init__()
         self._message = message
+        self.theme_name = theme_name
 
     def compose(self) -> ComposeResult:
         with Vertical(id="confirm-modal"):
             yield Label(self._message, id="confirm-msg")
             yield Label("[dim]y confirm  n cancel[/dim]", id="confirm-hint")
+
+    def on_mount(self):
+        t = THEMES.get(self.theme_name, THEMES["opencode"])
+
+        modal = self.query_one("#confirm-modal")
+        modal.styles.background = t["bg_panel"]
+        modal.styles.border = ("solid", t["border_active"])
+
+        self.query_one("#confirm-msg").styles.color = t["primary"]
+        self.query_one("#confirm-hint").styles.color = t["text_muted"]
 
     def action_confirm(self):
         self.dismiss(True)
@@ -492,8 +534,9 @@ class SearchModal(ModalScreen):
         Binding("escape", "cancel", "Cancel"),
     ]
 
-    def __init__(self):
+    def __init__(self, theme_name: str = "opencode"):
         super().__init__()
+        self.theme_name = theme_name
         self._results = []
         self._search_version = 0
 
@@ -506,6 +549,23 @@ class SearchModal(ModalScreen):
             yield Label("[dim]enter open  esc cancel[/dim]", id="search-hint")
 
     def on_mount(self):
+        self.query_one("#search-input").focus()
+
+        t = THEMES.get(self.theme_name, THEMES["opencode"])
+
+        modal = self.query_one("#search-modal")
+        modal.styles.background = t["bg_panel"]
+        modal.styles.border = ("solid", t["border_active"])
+
+        self.query_one("#search-title").styles.color = t["primary"]
+        self.query_one("#search-hint").styles.color = t["text_muted"]
+
+        inp = self.query_one("#search-input")
+        inp.styles.background = t["bg"]
+        inp.styles.color = t["text"]
+        inp.styles.border = ("solid", t["border_active"])
+
+        self.query_one("#search-results-container").styles.background = t["bg_panel"]
         self.query_one("#search-input").focus()
 
     def on_input_changed(self, event: Input.Changed):
@@ -538,6 +598,26 @@ class SearchModal(ModalScreen):
 
     def action_cancel(self):
         self.dismiss(None)
+
+
+# ─────────────────────────────────────────────
+#  Editor
+# ─────────────────────────────────────────────
+
+class OpenPadTextArea(TextArea):
+    """Text editor that inserts spaces on Tab and exits edit mode when focus leaves."""
+
+    BINDINGS = [
+        Binding("tab", "insert_tab", "Insert Tab", show=False),
+    ]
+
+    def action_insert_tab(self):
+        self.insert("    ")
+
+    def on_blur(self) -> None:
+        app = self.app
+        if getattr(app, "edit_mode", False):
+            app.call_later(app.action_view_mode)
 
 
 # ─────────────────────────────────────────────
@@ -729,7 +809,7 @@ class OpenPad(App):
                 yield Tree("Notes", id="note-tree")
             with ContentSwitcher(id="editor-area", initial="note-viewer"):
                 yield NoteViewer(id="note-viewer")
-                yield TextArea(id="text-editor")
+                yield OpenPadTextArea(id="text-editor")
         with Horizontal(id="statusbar"):
             yield Static("", id="status-left")
             yield Static("", id="status-right")
@@ -799,7 +879,7 @@ class OpenPad(App):
         tree = self.query_one("#note-tree", Tree)
         tree.styles.background = t["bg_panel"]
         tree.styles.color = t["text"]
-        tree.styles.padding = (1, 1)
+        tree.styles.padding = (0, 1)
 
         viewer = self.query_one("#note-viewer", NoteViewer)
         viewer.styles.background = t["bg"]
@@ -942,7 +1022,7 @@ class OpenPad(App):
             self._update_status()
             folder_label = f"{folder}/" if folder and folder != "__root__" else ""
             session_log.append(f"  + created note:  {folder_label}{name}")
-        self.push_screen(InputModal(" New Note", "Note name..."), handle)
+        self.push_screen(InputModal(" New Note", "Note name...", self.active_pad_theme), handle)
 
     def action_new_folder(self):
         def handle(name):
@@ -951,7 +1031,7 @@ class OpenPad(App):
             create_folder(name)
             self._rebuild_tree()
             session_log.append(f"  + created folder: {name}")
-        self.push_screen(InputModal(" New Folder", "Folder name..."), handle)
+        self.push_screen(InputModal(" New Folder", "Folder name...", self.active_pad_theme), handle)
 
     def action_delete_item(self):
         if not self.selected_note:
@@ -971,7 +1051,7 @@ class OpenPad(App):
                 viewer = self.query_one("#note-viewer", NoteViewer)
                 viewer.set_content("", self.active_pad_theme)
                 self._update_status()
-        self.push_screen(ConfirmModal(msg), handle)
+        self.push_screen(ConfirmModal(msg, self.active_pad_theme), handle)
 
     def action_search(self):
         def handle(result):
@@ -982,7 +1062,7 @@ class OpenPad(App):
                 self.edit_mode = False
                 self._load_note_view()
                 self._update_status()
-        self.push_screen(SearchModal(), handle)
+        self.push_screen(SearchModal(self.active_pad_theme), handle)
 
     def action_quit(self):
         if self.edit_mode and self.selected_note:
@@ -1008,6 +1088,7 @@ class OpenPad(App):
         if val == "/theme":
             event.stop()
             self.action_open_theme_picker()
+
 
 
 CSS_EXTRA = """
