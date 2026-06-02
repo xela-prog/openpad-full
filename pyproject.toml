@@ -1,6 +1,6 @@
 [project]
 name = "openpad"
-version = "1.1.0"
+version = "1.1.1"
 description = "Terminal-based note-taking app for computer science students"
 readme = "README.md"
 authors = [
