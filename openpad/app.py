@@ -2259,6 +2259,12 @@ Input {
 
 
 def main():
+    import sys as _sys
+    if len(_sys.argv) > 1 and _sys.argv[1] == "--version":
+        from importlib.metadata import version as _version
+        print(f"openpad {_version('openpad')}")
+        return
+
     notes_dir = Path.home() / ".openpad" / "notes"
     if not notes_dir.exists() or not any(notes_dir.iterdir()):
         print("")

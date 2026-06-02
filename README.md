@@ -52,10 +52,12 @@ openpad
 
 ### Linux (Arch / Manjaro)
 
+Arch protects its system Python (PEP 668). Use **pipx** — it creates an isolated environment for CLI apps:
+
 ```bash
 python --version
-sudo pacman -S python python-pip
-pip install openpad                  # or: pip install "openpad[calendar]"
+sudo pacman -S python python-pipx
+pipx install openpad                 # or: pipx install "openpad[calendar]"
 openpad
 ```
 
@@ -101,11 +103,11 @@ openpad
 All your notes, settings, and credentials are stored in `~/.openpad/` — upgrading the app never touches them.
 
 ```bash
-# Basic upgrade
-pip install --upgrade openpad
+# If installed via pipx (recommended for Arch / Manjaro)
+pipx upgrade openpad                 # or: pipx upgrade "openpad[calendar]"
 
-# With calendar support
-pip install --upgrade "openpad[calendar]"
+# If installed via pip
+pip install --upgrade openpad        # or: pip install --upgrade "openpad[calendar]"
 
 # If installed from source
 git pull
