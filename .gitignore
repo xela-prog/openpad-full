@@ -1,12 +1,24 @@
 # Ignore API keys and secrets
 credentials.json
+token.pickle
 
 # Ignore Python cache
 __pycache__/
 *.py[cod]
 
-# Ignore VS Code settings
+# Ignore build artifacts
+*.egg-info/
+dist/
+build/
+*.egg
+
+# Ignore virtual environments
+.venv/
+venv/
+
+# Ignore IDE settings
 .vscode/
+.opencode/
 
 # Ignore OS files
 .DS_Store

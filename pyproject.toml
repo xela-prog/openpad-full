@@ -1,16 +1,23 @@
 [project]
 name = "openpad"
-version = "1.0.3"
+version = "1.1.0"
 description = "Terminal-based note-taking app for computer science students"
 readme = "README.md"
 authors = [
-    { name = "Pierre-alexandre Merge Fignole" }
+    { name = "Pierre-Alexandre Merge Fignole" }
 ]
 requires-python = ">=3.10"
 
 dependencies = [
     "textual>=0.80.0",
     "rich>=13.0.0"
+]
+
+[project.optional-dependencies]
+calendar = [
+    "google-auth>=2.0.0",
+    "google-auth-oauthlib>=0.4.0",
+    "google-api-python-client>=2.0.0",
 ]
 
 [project.scripts]
