@@ -23,6 +23,7 @@ from datetime import datetime
 session_log = []
 
 from openpad.themes import THEMES, THEME_DESCRIPTIONS
+from openpad.system_theme import detect_system_theme
 from openpad.notes import (
     get_tree, read_note, write_note, delete_note,
     create_folder, delete_folder, search_notes,
@@ -747,6 +748,8 @@ class ThemePicker(ModalScreen):
     BINDINGS = [
         Binding("escape", "dismiss", "Close"),
         Binding("enter", "select", "Select"),
+        Binding("up", "cursor_up", "", show=False, priority=True),
+        Binding("down", "cursor_down", "", show=False, priority=True),
     ]
 
     def __init__(self, current_theme: str):
@@ -762,6 +765,14 @@ class ThemePicker(ModalScreen):
             with ScrollableContainer(id="theme-list-container"):
                 yield ListView(id="theme-list")
             yield Static("", id="theme-footer")
+
+    def _refresh_arrow(self):
+        lv = self.query_one("#theme-list", ListView)
+        for i, item in enumerate(lv.children):
+            name = self.theme_names[i]
+            desc = THEME_DESCRIPTIONS.get(name, "")
+            static = item.children[0]
+            static.update(f"  {'▶ ' if i == lv.index else '  '}{name:<26} {desc}")
 
     def on_mount(self):
         t = THEMES.get(self.active_pad_theme, THEMES["opencode"])
@@ -784,13 +795,13 @@ class ThemePicker(ModalScreen):
         self.query_one("#theme-footer").styles.color = t["error"]
         lv = self.query_one("#theme-list", ListView)
         for name in self.theme_names:
-            desc = THEME_DESCRIPTIONS.get(name, "")
-            item = ListItem(
-                Static(f"  {'▶ ' if name == self.active_pad_theme else '  '}{name:<26} {desc}"),
-                id=f"theme-{name}"
-            )
+            item = ListItem(Static(""), id=f"theme-{name}")
             lv.append(item)
         lv.index = self.selected_idx
+        self._refresh_arrow()
+
+    def on_list_view_highlighted(self, event: ListView.Highlighted):
+        self._refresh_arrow()
 
     def on_click(self, event: events.Click) -> None:
         modal = self.query_one("#theme-modal")
@@ -809,6 +820,16 @@ class ThemePicker(ModalScreen):
 
     def action_dismiss(self):
         self.dismiss(None)
+
+    def action_cursor_up(self):
+        lv = self.query_one("#theme-list", ListView)
+        if lv.index is not None and lv.index > 0:
+            lv.index -= 1
+
+    def action_cursor_down(self):
+        lv = self.query_one("#theme-list", ListView)
+        if lv.index is not None and lv.index < len(self.theme_names) - 1:
+            lv.index += 1
 
 
 # ─────────────────────────────────────────────
@@ -1479,7 +1500,7 @@ class OpenPad(App):
 
     def on_unmount(self):
         # Print ASCII art in the current theme's primary color
-        t = THEMES.get(self.active_pad_theme, THEMES["opencode"])
+        t = getattr(self, "_resolved_theme", THEMES.get(self.active_pad_theme, THEMES["opencode"]))
         primary = t.get("primary", "#c4a882")
         # Convert hex color to ANSI 24-bit escape sequence
         def hex_to_ansi(hex_color):
@@ -1502,7 +1523,12 @@ class OpenPad(App):
             print(f"{ansi_color}  No changes made this session.{reset}")
 
     def _apply_theme(self):
-        t = THEMES.get(self.active_pad_theme, THEMES["opencode"])
+        if self.active_pad_theme == "system":
+            t = detect_system_theme()
+            THEMES["system"] = t
+        else:
+            t = THEMES.get(self.active_pad_theme, THEMES["opencode"])
+        self._resolved_theme = t
         self.screen.styles.background = t["bg"]
 
         sidebar = self.query_one("#sidebar")
@@ -1576,7 +1602,7 @@ class OpenPad(App):
             self._load_note_view()
 
     def _update_status(self):
-        t = THEMES.get(self.active_pad_theme, THEMES["opencode"])
+        t = getattr(self, "_resolved_theme", THEMES.get(self.active_pad_theme, THEMES["opencode"]))
         sb = self.query_one("#status-content")
 
         mode = "EDIT" if self.edit_mode else "VIEW"
@@ -2246,7 +2272,7 @@ ListItem:hover {
     background: #ffffff10;
 }
 ListItem.--highlight {
-    background: #ffffff18;
+    background: #ffffff30;
 }
 Input {
     border: solid #444444;
